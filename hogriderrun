@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hog Rider: Skeleton Siege</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bangers&display=swap');
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #020617; 
+            font-family: 'Bangers', system-ui, -apple-system, sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            border: 4px solid #166534;
+            border-radius: 20px;
+            box-shadow: 0 0 60px rgba(0,0,0,0.8);
+            background: #bae6fd;
+            transition: background 1.5s ease, border-color 1.5s ease;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            width: 90%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .stats-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #f3f4f6;
+            text-shadow: 3px 3px 0px #000;
+            font-size: 2.2rem;
+        }
+
+        #hearts-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .heart {
+            width: 35px;
+            height: 35px;
+            filter: drop-shadow(2px 2px 0px #000);
+        }
+
+        #elixir-count { color: #f472b6; } 
+        #level-indicator { color: #fbbf24; font-size: 2.8rem; }
+
+        #start-screen, #game-over, #pause-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem 3rem;
+            border-radius: 40px;
+            color: #1e293b;
+            border: 4px solid #166534;
+            z-index: 30;
+            min-width: 420px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+
+        .level-select {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+            pointer-events: auto;
+        }
+
+        .level-btn {
+            background: #e2e8f0;
+            padding: 8px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .level-btn:hover { background: #cbd5e1; }
+        .level-btn.selected {
+            background: #f472b6;
+            color: white;
+            border-color: #be185d;
+            transform: scale(1.05);
+        }
+
+        .btn {
+            background: #d97706;
+            color: white;
+            padding: 10px 40px;
+            border-radius: 18px;
+            font-size: 2.2rem;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 6px 0 #92400e;
+            margin-top: 15px;
+            transition: all 0.1s;
+            pointer-events: auto;
+            width: 100%;
+        }
+
+        .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #92400e; }
+
+        .btn-adventure {
+            background: #166534;
+            box-shadow: 0 6px 0 #064e3b;
+            margin-bottom: 20px;
+        }
+        .btn-adventure:active { box-shadow: 0 2px 0 #064e3b; }
+
+        #pause-trigger {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: auto;
+            z-index: 40;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        .popup {
+            position: absolute;
+            color: #be185d;
+            font-size: 2.5rem;
+            font-weight: bold;
+            pointer-events: none;
+            animation: popupAnim 0.7s ease-out forwards;
+            z-index: 100;
+            text-shadow: 2px 2px #fff;
+        }
+
+        @keyframes popupAnim {
+            0% { transform: translateY(0) scale(0.6); opacity: 0; }
+            100% { transform: translateY(-120px) scale(1.3); opacity: 0; }
+        }
+
+        .level-up-flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 50;
+        }
+        
+        .hidden { display: none !important; }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #94a3b8;
+            margin: 15px 0;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .divider:not(:empty)::before { margin-right: .5em; }
+        .divider:not(:empty)::after { margin-left: .5em; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="ui-layer">
+        <div class="stats-top">
+            <div>ELIXIR: <span id="elixir-count">0</span></div>
+            <div id="level-indicator">LEVEL 1</div>
+            <div style="width: 100px;"></div> 
+        </div>
+        <div id="hearts-container"></div>
+    </div>
+
+    <div id="pause-trigger" class="hidden">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="white">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+    </div>
+
+    <div id="flash" class="level-up-flash"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="start-screen">
+        <h1 class="text-6xl mb-4 text-pink-500 italic">HOG RIDER!</h1>
+        
+        <button class="btn btn-adventure" id="adventureBtn">START ADVENTURE</button>
+        
+        <div class="divider">OR QUICK PLAY</div>
+        
+        <p class="text-sm text-slate-600 mb-1">Select Starting World:</p>
+        <div class="level-select">
+            <button class="level-btn selected" data-level="1">LVL 1: Field</button>
+            <button class="level-btn" data-level="2">LVL 2: Undead</button>
+            <button class="level-btn" data-level="3">LVL 3: Lava</button>
+            <button class="level-btn" data-level="4">LVL 4: Heaven</button>
+            <button class="level-btn" data-level="5">LVL 5: Sea</button>
+            <button class="level-btn" data-level="6">LVL 6: Space</button>
+            <button class="level-btn" data-level="7">LVL 7: Mushroom</button>
+        </div>
+
+        <button class="btn" id="startBtn">PLAY</button>
+        <p class="mt-4 text-sm text-slate-500 italic">Space: Jump | Z: Hammer | P: Pause</p>
+    </div>
+
+    <div id="pause-screen" class="hidden">
+        <h1 class="text-6xl mb-6 text-slate-700 italic">PAUSED</h1>
+        <button class="btn" id="resumeBtn">RESUME</button>
+        <button class="btn btn-secondary" id="menuBtn">MAIN MENU</button>
+    </div>
+
+    <div id="game-over" class="hidden">
+        <h1 class="text-6xl mb-2 text-red-600">DEFEAT!</h1>
+        <p id="final-score" class="text-4xl mb-6 text-pink-600">0 Elixir</p>
+        <button class="btn" id="restartBtn">TRY AGAIN</button>
+        <button class="btn btn-secondary mt-4" id="gameOverMenuBtn">MENU</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const elixirDisplay = document.getElementById('elixir-count');
+    const levelDisplay = document.getElementById('level-indicator');
+    const heartsContainer = document.getElementById('hearts-container');
+    const startScreen = document.getElementById('start-screen');
+    const pauseScreen = document.getElementById('pause-screen');
+    const gameOverScreen = document.getElementById('game-over');
+    const pauseTrigger = document.getElementById('pause-trigger');
+    const finalScoreDisplay = document.getElementById('final-score');
+    const flashOverlay = document.getElementById('flash');
+    
+    const adventureBtn = document.getElementById('adventureBtn');
+    const startBtn = document.getElementById('startBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const menuBtn = document.getElementById('menuBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const gameOverMenuBtn = document.getElementById('gameOverMenuBtn');
+    const levelBtns = document.querySelectorAll('.level-btn');
+
+    const GAME_WIDTH = 800;
+    const GAME_HEIGHT = 450;
+    const GROUND_Y = 360;
+    
+    let GRAVITY = 0.65; 
+    let JUMP_FORCE = -14.5;
+
+    let isRunning = false;
+    let isPaused = false;
+    let isAdventureMode = false;
+    let elixir = 0;
+    let lives = 3;
+    let invincibilityFrames = 0;
+    let gameSpeed = 4;
+    let frameCount = 0;
+    let entities = [];
+    let particles = [];
+    let currentLevel = 1;
+    let selectedStartLevel = 1;
+    let shakeIntensity = 0;
+    let bgOffset = 0;
+
+    const heartSVG = `
+        <svg viewBox="0 0 32 32" class="heart">
+            <path fill="#ef4444" d="M16 28.5L14.1 26.6C7.2 20.4 2.7 16.3 2.7 11.2C2.7 7.1 5.9 3.9 10 3.9C12.3 3.9 14.5 5 16 6.7C17.5 5 19.7 3.9 22 3.9C26.1 3.9 29.3 7.1 29.3 11.2C29.3 16.3 24.8 20.4 17.9 26.6L16 28.5Z"/>
+        </svg>
+    `;
+
+    levelBtns.forEach(btn => {
+        btn.onclick = () => {
+            levelBtns.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedStartLevel = parseInt(btn.dataset.level);
+        };
+    });
+
+    function updateHeartsUI() {
+        heartsContainer.innerHTML = heartSVG.repeat(Math.max(0, lives));
+    }
+
+    const player = {
+        x: 120, y: GROUND_Y, width: 90, height: 105, vy: 0,
+        isJumping: false, isAttacking: false, attackFrame: 0,
+        
+        draw() {
+            if (invincibilityFrames > 0 && Math.floor(frameCount / 4) % 2 === 0) return;
+
+            const shadowWidth = Math.max(0, 60 - (Math.abs(GROUND_Y - this.y) * 0.4));
+            ctx.fillStyle = currentLevel === 6 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.25)';
+            ctx.beginPath();
+            ctx.ellipse(this.x + 40, GROUND_Y + 5, shadowWidth, Math.max(0, shadowWidth * 0.16), 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.save();
+            ctx.translate(this.x, this.y - this.height);
+            const runSpeed = currentLevel === 6 ? 0.05 : 0.15;
+            const runCycle = frameCount * runSpeed;
+            const bodyHop = (this.isJumping || currentLevel === 6) ? 0 : Math.abs(Math.sin(runCycle)) * 10;
+            const rotation = this.isJumping ? this.vy * 0.025 : Math.sin(runCycle * 0.5) * 0.06;
+            ctx.rotate(rotation);
+
+            const pinkDark = '#be185d';
+            
+            ctx.fillStyle = pinkDark;
+            const legOffset = Math.sin(runCycle);
+            const legBackOffset = Math.cos(runCycle);
+            ctx.beginPath();
+            ctx.ellipse(20, 100 - bodyHop + (legBackOffset * 5), 8, 12, legBackOffset * 0.3, 0, Math.PI*2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(50, 100 - bodyHop + (legOffset * 5), 8, 12, legOffset * 0.3, 0, Math.PI*2);
+            ctx.fill();
+
+            if (isRunning && !isPaused && frameCount % 4 === 0) {
+                let pCol = '#a8a29e';
+                if (currentLevel === 3) pCol = '#fbbf24';
+                if (currentLevel === 4) pCol = '#fff';
+                if (currentLevel === 5) pCol = '#60a5fa';
+                if (currentLevel === 6) pCol = '#cbd5e1'; 
+                if (currentLevel === 7) pCol = '#a855f7'; 
+                
+                particles.push({ 
+                    x: this.x + 20, y: this.y, 
+                    vx: -2 - Math.random() * 2, vy: -0.5 - Math.random(), 
+                    life: 1, size: (currentLevel >= 5) ? 3 + Math.random() * 5 : 2 + Math.random() * 4, 
+                    color: pCol
+                });
+            }
+
+            const bodyGrad = ctx.createRadialGradient(30, 60, 10, 35, 65, 50);
+            bodyGrad.addColorStop(0, '#f9a8d4'); bodyGrad.addColorStop(1, pinkDark);
+            ctx.fillStyle = bodyGrad;
+            ctx.beginPath(); ctx.ellipse(35, 75 - bodyHop, 50, 35, 0, 0, Math.PI * 2); ctx.fill();
+            
+            ctx.fillStyle = '#f472b6';
+            ctx.beginPath(); ctx.arc(72, 68 - bodyHop, 22, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = (frameCount % 120 < 5) ? '#be185d' : 'white';
+            ctx.beginPath(); ctx.arc(80, 62 - bodyHop, 5, 0, Math.PI * 2); ctx.fill();
+            if (frameCount % 120 >= 5) {
+                ctx.fillStyle = 'black';
+                ctx.beginPath(); ctx.arc(82, 62 - bodyHop, 2.5, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = '#fbcfe8';
+            ctx.beginPath(); ctx.ellipse(92, 75 - bodyHop, 15, 12, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.moveTo(85, 78 - bodyHop); ctx.lineTo(110, 62 - bodyHop); ctx.lineTo(90, 88 - bodyHop); ctx.fill();
+
+            ctx.fillStyle = '#b45309';
+            ctx.beginPath(); ctx.ellipse(30, 42 - bodyHop, 26, 20, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#92400e';
+            ctx.beginPath(); ctx.arc(35, 18 - bodyHop, 18, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#451a03';
+            ctx.beginPath();
+            ctx.moveTo(20, 18 - bodyHop); 
+            ctx.quadraticCurveTo(20, 42 - bodyHop, 35, 45 - bodyHop);
+            ctx.quadraticCurveTo(50, 42 - bodyHop, 50, 18 - bodyHop);
+            ctx.lineTo(45, 20 - bodyHop); ctx.lineTo(25, 20 - bodyHop); ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.beginPath(); ctx.arc(28, 14 - bodyHop, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(42, 14 - bodyHop, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath(); ctx.arc(29, 14 - bodyHop, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(43, 14 - bodyHop, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.moveTo(22, 5 - bodyHop); ctx.lineTo(35, -12 - bodyHop); ctx.lineTo(48, 5 - bodyHop); ctx.closePath(); ctx.fill();
+
+            ctx.save();
+            ctx.translate(50, 40 - bodyHop);
+            if (this.isAttacking) ctx.rotate((Math.PI / 0.8) * (this.attackFrame / 15));
+            else ctx.rotate(Math.sin(runCycle * 0.5) * 0.35);
+            ctx.fillStyle = '#451a03'; ctx.fillRect(0, -4, 55, 8);
+            ctx.fillStyle = '#475569'; ctx.fillRect(40, -30, 40, 60);
+            ctx.fillStyle = '#94a3b8'; ctx.fillRect(42, -28, 5, 56);
+            ctx.restore();
+            ctx.restore();
+        }
+    };
+
+    function spawnEntity() {
+        let logChance = 0.65;
+        if (currentLevel === 6) logChance = 0.90; 
+
+        const isLog = Math.random() > logChance;
+        const type = isLog ? 'log' : 'enemy';
+        let subtype = 'goblin';
+        if (currentLevel === 2) subtype = 'skeleton';
+        if (currentLevel === 3) subtype = 'lavamonster';
+        if (currentLevel === 4) subtype = 'angel';
+        if (currentLevel === 5) subtype = 'shark';
+        if (currentLevel === 6) subtype = 'alien';
+        if (currentLevel === 7) subtype = 'mushroom';
+
+        let speedMult = 1;
+        if (type === 'enemy') {
+            if (subtype === 'goblin') speedMult = 1.0 + Math.random() * 0.3;
+            else if (subtype === 'skeleton') speedMult = 0.7 + Math.random() * 0.2;
+            else if (subtype === 'lavamonster') speedMult = 0.5 + Math.random() * 0.2;
+            else if (subtype === 'angel') speedMult = 0.6 + Math.random() * 0.3;
+            else if (subtype === 'shark') speedMult = 0.6 + Math.random() * 0.3;
+            else if (subtype === 'alien') speedMult = 0.3 + Math.random() * 0.3; 
+            else if (subtype === 'mushroom') speedMult = 0.5 + Math.random() * 0.2; 
+        }
+
+        let yPos = GROUND_Y;
+        if (subtype === 'alien' || subtype === 'angel') {
+            yPos = GROUND_Y - 40 - Math.random() * 110;
+        }
+        
+        const spawnY = (type === 'log') ? GROUND_Y + 5 : yPos;
+
+        entities.push({
+            x: GAME_WIDTH + 150, y: spawnY,
+            width: (subtype === 'alien' || subtype === 'angel' || subtype === 'shark' || subtype === 'mushroom' ? 110 : (isLog ? 100 : 75)), 
+            height: (subtype === 'alien' || subtype === 'angel' ? 80 : (subtype === 'shark' ? 60 : (subtype === 'mushroom' ? 100 : (isLog ? 45 : 85)))),
+            type: type, subtype: subtype, dead: false, passed: false, hop: 0, speedMult: speedMult,
+            rotation: 0, rotVel: (Math.random() - 0.5) * (subtype === 'alien' ? 0.05 : 0.1),
+            spots: Array.from({length: 4}, () => ({rx: Math.random()*80-40, ry: Math.random()*25-35, s: 6+Math.random()*6}))
+        });
+    }
+
+    function drawBackground() {
+        if (!isPaused) bgOffset -= gameSpeed * (currentLevel === 6 ? 0.2 : 0.5); 
+        if (bgOffset < -GAME_WIDTH) bgOffset = 0;
+
+        if (currentLevel === 7) {
+            ctx.fillStyle = '#4c1d95'; 
+            for (let i = 0; i < 4; i++) {
+                let mx = (bgOffset * 0.3 + (i * 300)) % (GAME_WIDTH + 300);
+                if (mx < -150) mx += GAME_WIDTH + 300;
+                ctx.beginPath(); ctx.arc(mx, GROUND_Y, 150, Math.PI, 0); ctx.fill();
+            }
+            for (let i = 0; i < 5; i++) {
+                let mx = (bgOffset * 0.6 + (i * 220)) % (GAME_WIDTH + 200);
+                if (mx < -100) mx += GAME_WIDTH + 200;
+                ctx.fillStyle = '#fde047'; ctx.fillRect(mx + 35, GROUND_Y - 50, 15, 50);
+                ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.ellipse(mx + 42, GROUND_Y - 50, 40, 25, 0, Math.PI, 0); ctx.fill();
+            }
+        } else if (currentLevel === 6) {
+            ctx.fillStyle = 'white';
+            for (let i = 0; i < 60; i++) {
+                let sx = (bgOffset * 0.1 + (i * 12345)) % GAME_WIDTH;
+                let sy = (i * 6789) % GAME_HEIGHT;
+                let size = (i % 5 === 0) ? 2.5 : 1;
+                ctx.fillRect(sx, sy, size, size);
+            }
+            ctx.fillStyle = '#6366f1'; ctx.beginPath(); ctx.arc((bgOffset * 0.05) + 600, 150, 80, 0, Math.PI*2); ctx.fill();
+        } else if (currentLevel === 5) {
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            for (let i = 0; i < 8; i++) {
+                let cx = (bgOffset * 0.2 + (i * 150)) % (GAME_WIDTH + 200);
+                if (cx < -100) cx += GAME_WIDTH + 200;
+                ctx.beginPath(); ctx.arc(cx, 50 + (i * 40) + Math.sin(frameCount * 0.05 + i) * 10, 5 + Math.random() * 10, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.fillStyle = '#1e3a8a';
+            for (let i = 0; i < 5; i++) {
+                let sx = (bgOffset * 0.4 + (i * 220)) % (GAME_WIDTH + 200);
+                if (sx < -100) sx += GAME_WIDTH + 200;
+                ctx.beginPath(); ctx.moveTo(sx, GROUND_Y); ctx.bezierCurveTo(sx + 20, GROUND_Y - 100, sx + 40, GROUND_Y - 100, sx + 60, GROUND_Y); ctx.fill();
+            }
+        } else if (currentLevel === 4) {
+            ctx.fillStyle = '#fef08a';
+            for (let i = 0; i < 6; i++) {
+                let cx = (bgOffset * 0.3 + (i * 200)) % (GAME_WIDTH + 300);
+                if (cx < -150) cx += GAME_WIDTH + 300;
+                ctx.beginPath(); ctx.arc(cx, 100 + Math.sin(frameCount * 0.02 + i) * 20, 40, 0, Math.PI*2);
+                ctx.arc(cx + 30, 100 + Math.sin(frameCount * 0.02 + i) * 20, 50, 0, Math.PI*2);
+                ctx.arc(cx + 70, 100 + Math.sin(frameCount * 0.02 + i) * 20, 40, 0, Math.PI*2); ctx.fill();
+            }
+        } else if (currentLevel === 3) {
+            ctx.fillStyle = '#450a0a';
+            for (let i = 0; i < 4; i++) {
+                let vx = (bgOffset * 0.4 + (i * 300)) % (GAME_WIDTH + 300);
+                if (vx < -200) vx += GAME_WIDTH + 300;
+                ctx.beginPath(); ctx.moveTo(vx, GROUND_Y); ctx.lineTo(vx + 100, GROUND_Y - 250); ctx.lineTo(vx + 200, GROUND_Y); ctx.fill();
+                ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.moveTo(vx + 80, GROUND_Y - 200); ctx.lineTo(vx + 100, GROUND_Y - 250); ctx.lineTo(vx + 120, GROUND_Y - 200); ctx.fill(); ctx.fillStyle = '#450a0a';
+            }
+        } else {
+            ctx.fillStyle = currentLevel === 1 ? '#15803d' : '#1e1b4b';
+            for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(bgOffset + (i * 400), GROUND_Y, 200, Math.PI, 0); ctx.fill(); }
+            ctx.fillStyle = currentLevel === 1 ? '#166534' : '#0f172a';
+            for (let i = 0; i < 5; i++) {
+                let tx = (bgOffset * 1.5 + (i * 250)) % (GAME_WIDTH + 300);
+                if (tx < -100) tx += GAME_WIDTH + 300;
+                ctx.beginPath(); ctx.moveTo(tx, GROUND_Y); ctx.lineTo(tx + 40, GROUND_Y - 120); ctx.lineTo(tx + 80, GROUND_Y); ctx.fill();
+            }
+        }
+    }
+
+    function takeDamage() {
+        if (invincibilityFrames > 0) return;
+        lives--; updateHeartsUI(); shakeIntensity = 20; invincibilityFrames = 90;
+        if (lives <= 0) endGame();
+    }
+
+    function togglePause() {
+        if (!isRunning) return;
+        isPaused = !isPaused;
+        if (isPaused) pauseScreen.classList.remove('hidden');
+        else pauseScreen.classList.add('hidden');
+    }
+
+    function goToMenu() {
+        isPaused = false; isRunning = false;
+        pauseScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden');
+        pauseTrigger.classList.add('hidden'); startScreen.classList.remove('hidden');
+    }
+
+    function update() {
+        if (!isRunning || isPaused) return;
+        frameCount++;
+        
+        if (shakeIntensity > 0) shakeIntensity *= 0.9;
+        if (invincibilityFrames > 0) invincibilityFrames--;
+        
+        let gravityScale = GRAVITY;
+        let jumpScale = JUMP_FORCE;
+
+        if (currentLevel === 5) { gravityScale = 0.3; jumpScale = -10; }
+        if (currentLevel === 6) { gravityScale = 0.12; jumpScale = -6; } 
+
+        player.vy += gravityScale;
+        player.y += player.vy;
+        if (player.y > GROUND_Y) { player.y = GROUND_Y; player.vy = 0; player.isJumping = false; }
+        if (player.y < 50) { player.y = 50; player.vy = 0; }
+        
+        if (player.isAttacking) {
+            player.attackFrame++;
+            if (player.attackFrame > 15) { player.isAttacking = false; player.attackFrame = 0; }
+        }
+
+        const baseSpeed = 4.2; 
+        const targetSpeed = currentLevel === 6 ? baseSpeed * 0.8 : baseSpeed + (elixir / 8000) + (currentLevel * 0.4);
+        gameSpeed = targetSpeed;
+
+        if (frameCount % Math.max(30, 100 - Math.floor(gameSpeed * 3)) === 0) spawnEntity();
+
+        for (let i = entities.length - 1; i >= 0; i--) {
+            const en = entities[i];
+            if (en.dead) {
+                en.x += 10; en.y -= 6; en.rotation += 0.15;
+                if (en.x > GAME_WIDTH + 200) entities.splice(i, 1);
+                continue;
+            }
+            en.x -= gameSpeed * en.speedMult;
+            
+            if (en.type === 'enemy') {
+                if (en.subtype === 'alien' || en.subtype === 'angel') {
+                    en.hop = Math.sin(frameCount * 0.05) * 20;
+                } else if (en.subtype === 'mushroom') {
+                    en.hop = Math.abs(Math.sin(frameCount * 0.15)) * 20;
+                } else {
+                    const hopFreq = (en.subtype === 'shark') ? 0.04 : 0.08;
+                    const hopHeight = (en.subtype === 'lavamonster' || en.subtype === 'shark') ? 10 : 12;
+                    en.hop = Math.abs(Math.sin(frameCount * hopFreq)) * hopHeight;
+                }
+            } else {
+                en.hop = 0; 
+            }
+
+            const pBox = { left: player.x + 25, right: player.x + player.width - 25, top: player.y - player.height + 20, bottom: player.y - 10 };
+            const eBox = { left: en.x, right: en.x + en.width, top: en.y - en.height - en.hop, bottom: en.y - en.hop };
+
+            if (pBox.right > eBox.left && pBox.left < eBox.right && pBox.bottom > eBox.top && pBox.top < eBox.bottom) {
+                if (en.type === 'log') takeDamage();
+                else {
+                    if (player.isAttacking && player.attackFrame < 12) { 
+                        en.dead = true; shakeIntensity = 8;
+                        addElixir(150 + (currentLevel * 50), en.x, en.y - 120); 
+                    }
+                    else if (player.vy > 0.5 && pBox.bottom < eBox.top + 45) { 
+                        en.dead = true; player.vy = jumpScale; shakeIntensity = 5;
+                        addElixir(200 + (currentLevel * 50), en.x, en.y - 120); 
+                    }
+                    else takeDamage();
+                }
+            }
+            if (!en.passed && en.x < player.x) { en.passed = true; addElixir(25, player.x, player.y - 160); }
+            if (en.x < -250) entities.splice(i, 1);
+        }
+
+        particles.forEach((p, i) => { 
+            p.x += p.vx; p.y += p.vy; p.life -= 0.015; 
+            if (p.life <= 0) particles.splice(i, 1); 
+        });
+
+        if (currentLevel === 1 && elixir >= 1500) triggerLevel(2, "LEVEL 2");
+        if (currentLevel === 2 && elixir >= 3000) triggerLevel(3, "LAVA WORLD");
+        if (currentLevel === 3 && elixir >= 4000) triggerLevel(4, "HEAVENLY GATES");
+        if (currentLevel === 4 && elixir >= 5500) triggerLevel(5, "THE DEEP SEA");
+        if (currentLevel === 5 && elixir >= 7500) triggerLevel(6, "DEEP SPACE");
+        if (currentLevel === 6 && elixir >= 9500) triggerLevel(7, "MUSHROOM LAND");
+    }
+
+    function triggerLevel(num, label, skipVisual = false) {
+        currentLevel = num;
+        levelDisplay.innerText = label;
+        if (!skipVisual) {
+            flashOverlay.style.opacity = '1';
+            setTimeout(() => flashOverlay.style.opacity = '0', 200);
+            addElixir(0, GAME_WIDTH/2, GAME_HEIGHT/2);
+        }
+        const borders = {1:'#166534', 2:'#1e293b', 3:'#991b1b', 4:'#fbbf24', 5:'#1d4ed8', 6:'#6366f1', 7:'#a855f7'};
+        canvas.style.borderColor = borders[num];
+    }
+
+    function draw() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (shakeIntensity > 0.5) ctx.translate((Math.random()-0.5)*shakeIntensity, (Math.random()-0.5)*shakeIntensity);
+
+        const skies = {1:'#bae6fd', 2:'#020617', 3:'#450a0a', 4:'#fef9c3', 5:'#172554', 6:'#020617', 7:'#2e1065'};
+        ctx.fillStyle = skies[currentLevel]; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        
+        drawBackground();
+
+        const grounds = {1:'#166534', 2:'#1e293b', 3:'#1c1917', 4:'#fff', 5:'#fbbf24', 6:'#1e1b4b', 7:'#581c87'};
+        ctx.fillStyle = grounds[currentLevel]; ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+
+        entities.forEach(en => {
+            ctx.save();
+            const ey = en.y - en.hop; const ex = en.x;
+            if (en.dead) ctx.globalAlpha = 0.5;
+            
+            if (en.type === 'log') {
+                ctx.fillStyle = (currentLevel === 7) ? '#a855f7' : ((currentLevel >= 4) ? '#fbbf24' : (currentLevel === 3 ? '#1c1917' : '#78350f'));
+                ctx.fillRect(ex, ey - en.height, en.width, en.height);
+                ctx.fillStyle = currentLevel === 7 ? '#d8b4fe' : (currentLevel === 6 ? '#818cf8' : (currentLevel === 5 ? '#2563eb' : '#94a3b8'));
+                for(let i=0; i<4; i++) { ctx.beginPath(); ctx.moveTo(ex + 15 + i*22, ey - en.height); ctx.lineTo(ex + 22 + i*22, ey - en.height - 25); ctx.lineTo(ex + 29 + i*22, ey - en.height); ctx.fill(); }
+            } else if (en.subtype === 'goblin') {
+                const earWiggle = Math.sin(frameCount * 0.08) * 5;
+                ctx.fillStyle = '#166534'; ctx.beginPath(); ctx.ellipse(ex + 10, ey - 65 + earWiggle, 15, 8, -0.4, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(ex + 45, ey - 65 - earWiggle, 15, 8, 0.4, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.ellipse(ex + 27, ey - 55, 20, 22, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#064e3b'; ctx.beginPath(); ctx.arc(ex + 27, ey - 70, 10, Math.PI, 0); ctx.fill();
+                ctx.fillStyle = '#7c2d12'; ctx.fillRect(ex + 12, ey - 35, 30, 35); ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(ex + 18, ey - 58, 6, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(ex + 36, ey - 58, 6, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(ex + 20, ey - 58, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(ex + 38, ey - 58, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#14532d'; ctx.beginPath(); ctx.ellipse(ex + 27, ey - 48, 4, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#451a03'; ctx.save(); ctx.translate(ex + 5, ey - 40); ctx.rotate(Math.sin(frameCount * 0.1) * 0.2); ctx.fillRect(0, 0, 8, 25); ctx.beginPath(); ctx.arc(4, 25, 6, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            } else if (en.subtype === 'skeleton') {
+                ctx.fillStyle = '#f1f5f9'; ctx.beginPath(); ctx.arc(ex + 30, ey - 60, 22, 0, Math.PI*2); ctx.fill(); ctx.fillRect(ex + 20, ey - 48, 20, 12); ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(ex + 22, ey - 64, 5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(ex + 38, ey - 64, 5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.moveTo(ex + 30, ey - 56); ctx.lineTo(ex + 27, ey - 50); ctx.lineTo(ex + 33, ey - 50); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#f1f5f9'; ctx.fillRect(ex + 25, ey - 36, 10, 36); ctx.fillRect(ex + 10, ey - 28, 40, 6);
+            } else if (en.subtype === 'lavamonster') {
+                ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex+10, ey-85); ctx.lineTo(ex+60, ey-85); ctx.lineTo(ex+70, ey); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.moveTo(ex+15, ey-65); ctx.lineTo(ex+30, ey-60); ctx.lineTo(ex+18, ey-55); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(ex+55, ey-65); ctx.lineTo(ex+40, ey-60); ctx.lineTo(ex+52, ey-55); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(ex+20, ey-40); ctx.lineTo(ex+35, ey-35); ctx.lineTo(ex+50, ey-40); ctx.lineTo(ex+35, ey-25); ctx.closePath(); ctx.fill(); ctx.fillRect(ex + 15, ey - 15, 40, 4);
+            } else if (en.subtype === 'angel') {
+                const glowGrad = ctx.createRadialGradient(ex + 35, ey - 45, 10, ex + 35, ey - 45, 50); glowGrad.addColorStop(0, 'rgba(254, 240, 138, 0.4)'); glowGrad.addColorStop(1, 'rgba(254, 240, 138, 0)'); ctx.fillStyle = glowGrad; ctx.beginPath(); ctx.arc(ex + 35, ey - 45, 55, 0, Math.PI*2); ctx.fill();
+                const wingSwing = Math.sin(frameCount * 0.12) * 15; ctx.fillStyle = 'white'; ctx.save(); ctx.translate(ex + 25, ey - 50); ctx.rotate(-0.3 + wingSwing * 0.01); ctx.beginPath(); ctx.ellipse(-15, 0, 35, 12, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(-12, 8, 25, 10, 0.2, 0, Math.PI*2); ctx.fill(); ctx.restore(); ctx.save(); ctx.translate(ex + 45, ey - 50); ctx.rotate(0.3 - wingSwing * 0.01); ctx.beginPath(); ctx.ellipse(15, 0, 35, 12, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(12, 8, 25, 10, -0.2, 0, Math.PI*2); ctx.fill(); ctx.restore(); ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.moveTo(ex + 25, ey - 10); ctx.lineTo(ex + 35, ey - 65); ctx.lineTo(ex + 45, ey - 10); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fee2e2'; ctx.beginPath(); ctx.arc(ex + 35, ey - 70, 15, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.arc(ex + 30, ey - 72, 2.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(ex + 40, ey - 72, 2.5, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(ex + 35, ey - 92, 12, 4, 0, 0, Math.PI*2); ctx.stroke();
+            } else if (en.subtype === 'shark') {
+                const tailThrash = Math.sin(frameCount * 0.1) * 10; ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.moveTo(ex, ey - 30); ctx.lineTo(ex - 20, ey - 50 + tailThrash); ctx.lineTo(ex - 20, ey - 10 + tailThrash); ctx.closePath(); ctx.fill();
+                const sharkGrad = ctx.createLinearGradient(ex, ey - 60, ex, ey); sharkGrad.addColorStop(0, '#475569'); sharkGrad.addColorStop(0.7, '#94a3b8'); sharkGrad.addColorStop(1, '#e2e8f0'); ctx.fillStyle = sharkGrad; ctx.beginPath(); ctx.ellipse(ex + 45, ey - 30, 55, 25, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.moveTo(ex + 35, ey - 52); ctx.lineTo(ex + 55, ey - 85); ctx.lineTo(ex + 70, ey - 52); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.moveTo(ex + 85, ey - 45); ctx.quadraticCurveTo(ex + 115, ey - 30, ex + 85, ey - 15); ctx.fill(); ctx.fillStyle = 'white'; for(let i=0; i<3; i++) { ctx.beginPath(); ctx.moveTo(ex + 90 + i*6, ey - 30); ctx.lineTo(ex + 93 + i*6, ey - 20); ctx.lineTo(ex + 96 + i*6, ey - 30); ctx.fill(); }
+                ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(ex + 92, ey - 38, 3, 0, Math.PI * 2); ctx.fill();
+            } else if (en.subtype === 'alien') {
+                ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.ellipse(ex + 50, ey - 35, 50, 15, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'rgba(147, 197, 253, 0.8)'; ctx.beginPath(); ctx.arc(ex + 50, ey - 42, 22, Math.PI, 0); ctx.fill(); ctx.fillStyle = '#22c55e'; ctx.beginPath(); ctx.ellipse(ex + 50, ey - 52, 9, 12, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'black'; ctx.beginPath(); ctx.ellipse(ex + 46, ey - 55, 3, 5, 0.3, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(ex + 54, ey - 55, 3, 5, -0.3, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = (frameCount % 10 < 5) ? '#fbbf24' : '#ef4444'; ctx.beginPath(); ctx.arc(ex + 25, ey - 34, 4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(ex + 50, ey - 32, 4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(ex + 75, ey - 34, 4, 0, Math.PI*2); ctx.fill();
+            } else if (en.subtype === 'mushroom') {
+                const squash = 1 + Math.sin(frameCount * 0.15) * 0.12;
+                const stretch = 1 - Math.sin(frameCount * 0.15) * 0.12;
+                ctx.save();
+                ctx.translate(ex + 40, ey);
+                ctx.strokeStyle = '#2e1065';
+                ctx.lineWidth = 6;
+                ctx.lineJoin = 'round';
+                ctx.fillStyle = '#fef3c7';
+                ctx.beginPath();
+                ctx.roundRect(-15 * squash, -35 * stretch, 30 * squash, 35 * stretch, 8);
+                ctx.stroke();
+                ctx.fill();
+                ctx.fillStyle = '#f43f5e';
+                ctx.beginPath();
+                ctx.ellipse(0, -45 * stretch, 55 * squash, 35 * stretch, 0, Math.PI, 0);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.fill();
+                ctx.fillStyle = 'white';
+                en.spots.forEach(s => {
+                    ctx.beginPath();
+                    ctx.arc(s.rx * squash, (-45 + s.ry) * stretch, s.s, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.fillStyle = 'black';
+                ctx.beginPath(); ctx.arc(-10 * squash, -25 * stretch, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(10 * squash, -25 * stretch, 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(-11 * squash, -26 * stretch, 1.5, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(9 * squash, -26 * stretch, 1.5, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
+            }
+            ctx.restore();
+        });
+
+        particles.forEach(p => { 
+            ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); 
+            ctx.globalAlpha = 1;
+        });
+        
+        player.draw();
+        if (isPaused) { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0,0, GAME_WIDTH, GAME_HEIGHT); }
+    }
+
+    function addElixir(amount, x, y) {
+        if (amount > 0) { elixir += amount; elixirDisplay.innerText = elixir; }
+        const p = document.createElement('div');
+        p.className = 'popup'; p.style.left = x + 'px'; p.style.top = y + 'px';
+        p.innerText = amount === 0 ? "ASCENDED!" : `+${amount}`;
+        document.getElementById('game-container').appendChild(p);
+        setTimeout(() => p.remove(), 700);
+    }
+
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+    
+    function startGame(adventure = false) {
+        isAdventureMode = adventure;
+        elixir = 0;
+        if (!adventure) {
+            const elixirThresholds = [0, 0, 1500, 3000, 4000, 5500, 7500, 9500];
+            elixir = elixirThresholds[selectedStartLevel];
+            currentLevel = selectedStartLevel;
+        } else { currentLevel = 1; }
+
+        elixirDisplay.innerText = elixir; lives = 3; updateHeartsUI(); 
+        invincibilityFrames = 0; frameCount = 0; entities = []; particles = []; 
+        isRunning = true; isPaused = false;
+        player.y = GROUND_Y; player.vy = 0;
+        
+        const labels = ["", "LEVEL 1", "LEVEL 2", "LAVA WORLD", "HEAVENLY GATES", "THE DEEP SEA", "DEEP SPACE", "MUSHROOM LAND"];
+        triggerLevel(currentLevel, labels[currentLevel], true);
+        
+        startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden');
+        pauseScreen.classList.add('hidden'); pauseTrigger.classList.remove('hidden');
+    }
+
+    function endGame() {
+        isRunning = false; isPaused = false;
+        finalScoreDisplay.innerText = `${elixir} Elixir`; 
+        gameOverScreen.classList.remove('hidden'); pauseTrigger.classList.add('hidden');
+    }
+
+    startBtn.onclick = () => startGame(false);
+    adventureBtn.onclick = () => startGame(true);
+    resumeBtn.onclick = togglePause;
+    menuBtn.onclick = goToMenu;
+    gameOverMenuBtn.onclick = goToMenu;
+    pauseTrigger.onclick = togglePause;
+    restartBtn.onclick = () => startGame(isAdventureMode);
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+        if (!isRunning || isPaused) return;
+        if ((e.code === 'Space' || e.code === 'ArrowUp') && !player.isJumping) { 
+            let jf = JUMP_FORCE;
+            if (currentLevel === 5) jf = -10;
+            if (currentLevel === 6) jf = -6; 
+            player.vy = jf; player.isJumping = true; 
+        }
+        if (e.code === 'KeyZ' || e.code === 'ArrowDown') { player.isAttacking = true; player.attackFrame = 0; }
+    });
+
+    function resize() {
+        const scale = Math.min(1, (window.innerWidth - 20) / GAME_WIDTH);
+        canvas.width = GAME_WIDTH; canvas.height = GAME_HEIGHT;
+        canvas.style.width = (GAME_WIDTH * scale) + 'px'; canvas.style.height = (GAME_HEIGHT * scale) + 'px';
+    }
+
+    window.addEventListener('resize', resize); resize(); updateHeartsUI(); gameLoop();
+</script>
+</body>
+</html>
